@@ -1,6 +1,6 @@
 # Tournament-Mode-for-Ikemen-GO
 
-https://www.youtube.com/watch?v=neTcAwZmVw4
+[![Tournament Mode for Ikemen GO - Showcase]([TournamentMode.jpg](https://img.youtube.com/vi/neTcAwZmVw4/hqdefault.jpg))](https://www.youtube.com/watch?v=neTcAwZmVw4)
 
 [![Tournament Mode for Ikemen GO - Showcase](TournamentMode.jpg)](https://www.youtube.com/watch?v=neTcAwZmVw4)
 
