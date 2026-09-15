@@ -2,7 +2,7 @@
 
 
 
-\[!\[Tournament Mode for Ikemen GO - Showcase](https://img.youtube.com/vi/neTcAwZmVw4/maxresdefault.jpg)](https://www.youtube.com/watch?v=neTcAwZmVw4)
+\[!\[Tournament Mode for Ikemen GO - Showcase](https://img.youtube.com/vi/neTcAwZmVw4/0.jpg)](https://www.youtube.com/watch?v=neTcAwZmVw4)
 
 
 
