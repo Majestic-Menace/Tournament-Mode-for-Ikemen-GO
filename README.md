@@ -12,7 +12,7 @@ Tournament Mode has been a dream for many in the MUGEN community — myself incl
 
 
 
-I’ve set it up to be as simple as possible to install. This means you don't need to change anything in your system.def file, nor do you need to modify your existing character list in select.def. All you have to do is copy all the files into your Ikemen GO external\\mods folder, and that's it.
+I’ve set it up to be as simple as possible to install. This means you don't need to change anything in your system.def file, nor do you need to modify your existing character list in select.def. All you have to do is copy the paste into your Ikemen GO external\\mods folder, and that's it.
 
 
 
