@@ -4,6 +4,10 @@ A customizable tournament mode module for Ikemen GO
 
 
 
+https://www.youtube.com/watch?v=neTcAwZmVw4
+
+
+
 Alright folks, this is a tournament module designed for Ikemen GO.
 
 
