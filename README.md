@@ -32,7 +32,7 @@ TournamentModeFont.sff — font sprites
 
 
 
-This module currently supports 3 screenpack resolutions: 1280 × 720, 640 × 480 and 320 x 240. And Ikemen screen can run at one of two resolutions: 1280x720 or 640x480. I didn't set up the module to work with a 320x240 screen because I don't believe anyone plays with a screen that small.
+This module currently supports 3 screenpack resolutions: 1280 × 720, 640 × 480 and 320 x 240. And Ikemen screen can run at one of two resolutions: 1280 x 720 or 640 x 480. I didn't set up the module to work with a 320 x 240 screen because I don't believe anyone plays with a screen that small.
 
 Keep in mind: Localcoord and the Ikemen screen resolution are two different things.
 
