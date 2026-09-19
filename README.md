@@ -8,7 +8,7 @@ Alright folks, this is a tournament module designed for Ikemen GO.
 
 
 
-Tournament Mode has been a dream for many in the MUGEN community — myself included. I had asked for such a module to be created several times, until one day I decided to try making it myself. And I couldn't be happier with the result.
+Tournament Mode has been a dream for many in the Ikemen GO community — myself included. I had asked for such a module to be created some times, until one day I decided to try making it myself. And I couldn't be happier with the result.
 
 
 
@@ -31,17 +31,7 @@ TournamentModeFont.def — font definition
 TournamentModeFont.sff — font sprites
 
 
-
-This module currently supports 3 screenpack resolutions: 1280 × 720, 640 × 480 and 320 x 240. And Ikemen screen can run at one of two resolutions: 1280 x 720 or 640 x 480. I didn't set up the module to work with a 320 x 240 screen because I don't believe anyone plays with a screen that small.
-
-Keep in mind: Localcoord and the Ikemen screen resolution are two different things.
-
-I focused on these 3 screenpack resolutions because I believe they are the most widely used among the Ikemen GO community. It is important to note that, due to the lack of screen space, the 128-participant option is not available at 640 × 480 resolution.
-
-
-
-If there is significant demand for other resolutions, I can create them in the future.
-
+This module currently supports all resolutions except 320 x 240. I didn't set up the module to work with a 320 x 240 screen because I don't believe anyone plays with a screen that small. On the other hand, you can use a screenpack that employs a 320x240 localcoord. I should point out that localcoord is different from screen resolution; they are distinct things.
 
 
 Important:
