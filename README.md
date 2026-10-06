@@ -15,22 +15,6 @@ Tournament Mode has been a dream for many in the Ikemen GO community — myself 
 I’ve set it up to be as simple as possible to install. This means you don't need to change anything in your system.def file, nor do you need to modify your existing character list in select.def. All you have to do is copy the paste into your Ikemen GO external\\mods folder, and that's it.
 
 
-
-There are five files related to this tournament module:
-
-
-
-TournamentMode.lua — the tournament module itself
-
-TournamentMode.sff — sprites
-
-TournamentMode.mp3 — music
-
-TournamentModeFont.def — font definition
-
-TournamentModeFont.sff — font sprites
-
-
 This module currently supports all resolutions except 320 x 240. I didn't set up the module to work with a 320 x 240 screen because I don't believe anyone plays with a screen that small. On the other hand, you can use a screenpack that employs a 320x240 localcoord. I should point out that localcoord is different from screen resolution; they are distinct things.
 
 
@@ -38,21 +22,19 @@ Important:
 
 
 
-Some screenpacks use custom sprites to render main menu items (Versus, Options, etc.). This means that when Tournament Mode is selected from the main menu, the entire menu may become invisible.
-
-
-
-There is nothing I can do about this, as it would require me to create a Tournament Mode sprite for every existing screenpack out there.
-
-
-
-I strongly recommend using screenpacks that render menu items using a font, as the Tournament Mode option will always appear in that case.
+Some screenpacks use custom sprites to render main menu items (Versus, Options, etc.). This means that when Tournament Mode is selected from the main menu, the entire menu may become invisible. There is nothing I can do about this, as it would require me to create a Tournament Mode sprite for every existing screenpack out there. I strongly recommend using screenpacks that render menu items using a font, as the Tournament Mode option will always appear in that case.
 
 
 
 I don't think it's necessary to explain the tournament menu functions, as their names are self-explanatory.
 
+Credits:
 
+- Cable Dorado 2 (CD2) for input hints and PlasmoidThunder for SDL key conversion table
+
+- Cable Dorado 2 (CD2) and Orange Dolphin for testing the module
+
+- and Ohmga Shironeko: for allowing me to use some sprites from your screenpack
 
 I hope you enjoy this module! The only thing I ask in return is that you spread the word about it in some way. Feel free to share the module's GitHub link with others and even record YouTube videos showcasing it!
 
