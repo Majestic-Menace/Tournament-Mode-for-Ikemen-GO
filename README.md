@@ -1,6 +1,6 @@
 # Tournament-Mode-for-Ikemen-GO
 
-[![Tournament Mode for Ikemen GO - Showcase](TournamentMode.jpg)](https://www.youtube.com/watch?v=neTcAwZmVw4)
+[![Tournament Mode for Ikemen GO - Showcase](TournamentMode.png)](https://www.youtube.com/watch?v=e3oXlNoYqOk)
 
 
 
@@ -41,4 +41,5 @@ I hope you enjoy this module! The only thing I ask in return is that you spread 
 
 
 If you have any suggestions, feel free to contact me via Discord: majesticmenace
+or trought Ikemen GO official Discord https://discord.gg/m6xnH2suY
 
