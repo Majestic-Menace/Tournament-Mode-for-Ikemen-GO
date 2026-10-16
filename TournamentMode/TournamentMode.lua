@@ -863,7 +863,8 @@ function f_applyCharLocalcoord(anim, path)
         end
         x = tonumber(x)
         if x and x > 0 then
-            local base = tonumber(TOURNAMENT_REFERENCE_WIDTH) or 1280
+            local base = tonumber(TOURNAMENT_PORTRAIT_REF_W)
+                or tonumber(TOURNAMENT_REFERENCE_WIDTH) or 1280
             ws = base / x
             if ws < 0.4 then ws = 0.4 end
             if ws > 16 then ws = 16 end
@@ -2258,6 +2259,12 @@ end
 -- and Lua upvalues only see locals declared BEFORE the function.
 TOURNAMENT_REFERENCE_WIDTH  = 1280
 TOURNAMENT_REFERENCE_HEIGHT = 720
+
+-- TEST ONLY (giant portraits): portrait scale reference override.
+-- 1280 = current (matches HD native); 320 = shrinks every portrait 4x
+-- uniformly (relative sizes between chars DO NOT change: global factor).
+-- Only the ws divisor uses it (positions stay in 1280 space).
+TOURNAMENT_PORTRAIT_REF_W = 320
 
 -- Gets the native motif/screenpack localcoord
 local lcX = (motif and motif.info and motif.info.localcoord and motif.info.localcoord[1])
@@ -12499,7 +12506,8 @@ function f_editCharPortraitScales()
             local x = f_getCharLocalcoord(path)
             x = tonumber(x)
             if x and x > 0 then
-                ws = (tonumber(TOURNAMENT_REFERENCE_WIDTH) or 1280) / x
+                ws = (tonumber(TOURNAMENT_PORTRAIT_REF_W)
+                    or tonumber(TOURNAMENT_REFERENCE_WIDTH) or 1280) / x
                 if ws < 0.4 then ws = 0.4 end
                 if ws > 16 then ws = 16 end
             end
