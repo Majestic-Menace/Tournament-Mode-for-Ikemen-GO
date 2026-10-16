@@ -9,6 +9,32 @@ local menuFontPath = motif.files and motif.files["font" .. menuFontIndex]
 local minhaFonte = fontNew("external/mods/TournamentMode/TournamentModeFont.def", -1)
     or fontNew("external/mods/TournamentModeFont.def", -1)  -- fallback: raiz dos mods
 
+-- Boot asset check: a missing sibling file fails SILENTLY (black screens
+-- with no text: font/SFF draws are no-ops). Loud console warning instead.
+-- Usual cause: mod folder renamed (ex. "TournamentMode-main") or partial copy.
+do
+    local need = {
+        "external/mods/TournamentMode/TournamentMode.sff",
+        "external/mods/TournamentMode/TournamentModeFont.def",
+        "external/mods/TournamentMode/tournament_lang_en.lua",
+        "external/mods/TournamentMode/tournament_country_flags.lua",
+        "external/mods/TournamentMode/tournament_cpu_ids.txt",
+    }
+    tournamentMissingAssets = {}
+    for _, p in ipairs(need) do
+        local f = io.open(p, "r")
+        if f then f:close()
+        else tournamentMissingAssets[#tournamentMissingAssets + 1] = p end
+    end
+    if #tournamentMissingAssets > 0 then
+        print("[Tournament][FATAL] missing mod files (incomplete install or renamed folder?):")
+        for _, p in ipairs(tournamentMissingAssets) do
+            print("[Tournament][FATAL]   MISSING: " .. tostring(p))
+        end
+        print("[Tournament][FATAL] menus will show black with no text until these exist.")
+    end
+end
+
 -- =====================================================================
 -- KEYCAP Y (ADJUST rÃƒÆ’Ã†--  Ãƒâ€šÃ‚Â¡pido - anota no txt!):
 --   TOURNAMENT_KEYCAP_DY_SIDE   = Y das keys do "PRESS X TO ERASE" /
@@ -983,6 +1009,7 @@ function f_resetMenuItemsToDefaults(list)
         ["BACKGROUND OVERLAY OPACITY:"] = "bgOpacity",
         ["PORTRAIT BACKGROUND SPRITE:"] = "portraitBgSprite",
         ["SCREENPACK BG SPRITE SCALE:"] = "screenpackBgScale",
+        ["STAGE PORTRAIT SCALE:"] = "stagePortraitScale",
         ["TROPHY SPRITE:"] = "trophySprite",
         ["SHOW ANIMATED PORTRAITS:"] = "showAnimatedPortraits",
         ["SHOW ANIMATED PORTRAIT BGS:"] = "showAnimatedPortraitsBg",
@@ -3801,7 +3828,9 @@ tournament = {
     resultsMusicTrack = 4,        -- Misc Settings > RESULTS SCREEN MUSIC: 1..15 (final screen)
     trophySprite = 0,      -- Misc Settings > TROPHY SPRITE: 0/1/2 (SFF group 3) | -1 = NONE
     portraitBgSprite = 1,  -- Misc: 1=Module(150,1) | 2=Module 2(150,0) | 3=Screenpack Original
-    screenpackBgScale = 1.0,  -- Misc > SCREENPACK BG SPRITE SCALE (bracket cell.bg.spr x)
+    screenpackBgScale = 1.0,
+    stagePortraitScale = 1.0,  -- Misc > SCREENPACK BG SPRITE SCALE (bracket cell.bg.spr x)
+    stagePortraitScale = 1.0,  -- Misc > STAGE PORTRAIT SCALE: 0.01..5.00 (stage portrait art x)
     stagePortraitBg = "Module",  -- Misc > STAGE SELECT PORTRAIT BG: Module | Screenpack Original
     showAnimatedPortraits = true, -- Misc > SHOW ANIMATED PORTRAITS: ON/OFF (always OFF in SD)
     showAnimatedPortraitsBg = true, -- Misc > SHOW ANIMATED PORTRAIT BACKGROUNDS: ON/OFF (anims 8686/8787)
@@ -3875,6 +3904,7 @@ local TOURNAMENT_DEFAULTS_SD = {
     trophySprite = 0,
     portraitBgSprite = 1,
     screenpackBgScale = 1.0,
+    stagePortraitScale = 1.0,
     showAnimatedPortraits = true,
     showAnimatedPortraitsBg = true,
     showBigPortraits = false,
@@ -3938,6 +3968,7 @@ local TOURNAMENT_DEFAULTS_HD = {
     trophySprite = 0,
     portraitBgSprite = 1,
     screenpackBgScale = 1.0,
+    stagePortraitScale = 1.0,
     showAnimatedPortraits = true,
     showAnimatedPortraitsBg = true,
     showBigPortraits = false,
@@ -4406,8 +4437,11 @@ TOURNAMENT_LABEL_TO_KEY = {
     ["BACKGROUND SOURCE:"] = "menu_bg_source",
     ["BACKGROUND OVERLAY OPACITY:"] = "menu_bg_opacity",
     ["CHARACTERS PORTRAITS SCALE:"] = "menu_portrait_scale_action",
+    ["CHARACTERS SMALL PORTRAIT SCALE:"] = "menu_portrait_scale_small",
+    ["CHARACTERS ANIM PORTRAIT SCALE:"] = "menu_portrait_scale_anim",
     ["PORTRAIT BACKGROUND SPRITE:"] = "menu_portrait_bg_sprite",
     ["SCREENPACK BG SPRITE SCALE:"] = "menu_screenpack_bg_scale",
+    ["STAGE PORTRAIT SCALE:"] = "menu_stage_portrait_scale",
     ["STAGE SELECT PORTRAIT BG:"] = "menu_stage_portrait_bg",
     ["TROPHY SPRITE:"] = "menu_trophy_sprite",
     ["SHOW ANIMATED PORTRAITS:"] = "menu_show_anim_portraits",
@@ -4796,7 +4830,9 @@ local function f_buildTournamentConfigData()
         trophySprite = tournament.trophySprite,
         portraitBgSprite = tournament.portraitBgSprite,
         screenpackBgScale = tournament.screenpackBgScale,
+        stagePortraitScale = tournament.stagePortraitScale,
         charPortraitScales = tournament.charPortraitScales,
+        charAnimPortraitScales = tournament.charAnimPortraitScales,
         showAnimatedPortraits = tournament.showAnimatedPortraits,
         showAnimatedPortraitsBg = tournament.showAnimatedPortraitsBg,
         showBigPortraits = tournament.showBigPortraits,
@@ -4999,6 +5035,12 @@ local function f_loadTournamentConfig()
         if ss > 5 then ss = 5 end
         tournament.screenpackBgScale = ss
     end
+    if data.stagePortraitScale ~= nil then
+        local sps = tonumber(data.stagePortraitScale) or 1
+        if sps < 0.01 then sps = 0.01 end
+        if sps > 5 then sps = 5 end
+        tournament.stagePortraitScale = sps
+    end
     if type(data.charPortraitScales) == "table" then
         -- Compact: older multi-key saves could hold 8+ entries per char and
         -- crash f_serializeTable (registry overflow). Keep one key per
@@ -5023,6 +5065,12 @@ local function f_loadTournamentConfig()
         end
         tournament.charPortraitScales = compact
         tournamentCharPortraitScaleBaseIndex = nil
+    end
+    -- Anim store (Action 0 + win poses): same one-key discipline (canon key
+    -- written by the editor, so no compact pass needed on load).
+    if type(data.charAnimPortraitScales) == "table" then
+        tournament.charAnimPortraitScales = data.charAnimPortraitScales
+        tournamentCharAnimPortraitScaleBaseIndex = nil
     end
     -- NOTE: data.charLocalcoordCache (older saves) is deliberately ignored: the
     -- char .def values (localcoord, portraitscale) are read live each boot and
@@ -5375,15 +5423,30 @@ local function f_buildValidCharKeySet()
         end
     end
     -- Fallback: scans t_selGrid directly if list came empty
+    -- (all refs per cell: multi-char slots list every char).
     if nValid == 0 and main and type(main.t_selGrid) == "table" and start and type(start.f_selGrid) == "function" then
         for i = 1, #main.t_selGrid do
             local entry = start.f_selGrid(i)
-            if entry and entry.char ~= nil and entry.char_ref ~= nil then
-                local charData = start.f_getCharData and start.f_getCharData(entry.char_ref) or nil
-                local rawPath = (charData and charData.char) or tostring(entry.char)
-                nValid = nValid + 1
-                for k, _ in pairs(f_charPathMatchKeys(rawPath)) do
-                    keySet[k] = true
+            if entry and entry.char ~= nil then
+                local refs = {}
+                local cell = main.t_selGrid[i]
+                if type(cell) == "table" and type(cell.chars) == "table" then
+                    for _, r in ipairs(cell.chars) do
+                        local n = tonumber(r)
+                        if n ~= nil then refs[#refs + 1] = n end
+                    end
+                end
+                if entry.char_ref ~= nil then
+                    local n = tonumber(entry.char_ref)
+                    if n ~= nil then refs[#refs + 1] = n end
+                end
+                for _, cref in ipairs(refs) do
+                    local charData = start.f_getCharData and start.f_getCharData(cref) or nil
+                    local rawPath = (charData and charData.char) or tostring(entry.char)
+                    nValid = nValid + 1
+                    for k, _ in pairs(f_charPathMatchKeys(rawPath)) do
+                        keySet[k] = true
+                    end
                 end
             end
         end
@@ -6475,6 +6538,16 @@ local function f_loadCharPortrait(participant)
         f_portraitCellPathDebug(participantId, "cell-hit (native select cell_data)")
         return cellAnim
     end
+    -- No cell art (e.g. cell-mates of multi-char slots): fall back to the
+    -- char's own 9000,0 instead of an empty cell.
+    if type(f_loadCharPortrait9000) == "function" then
+        local ok9, a9 = pcall(f_loadCharPortrait9000, realPath)
+        if ok9 and a9 and type(a9) == "userdata" then
+            tournament.portraitCache[participantId] = a9
+            f_portraitCellPathDebug(participantId, "9000 store-hit (no cell art)")
+            return a9
+        end
+    end
     tournament.portraitCache[participantId] = false
     f_portraitCellPathDebug(participantId, "cell-miss (cell_data not staged)")
     return nil
@@ -7048,14 +7121,33 @@ f_getValidCharData = function(ignorePool)
     local seenCharNames = {}
     for i = 1, #main.t_selGrid do
         local entry = start.f_selGrid(i)
-        local ref = entry.char_ref
-        if entry.char ~= nil and ref ~= nil then
+        -- ALL refs in this cell (multi-char slots list every char; the
+        -- engine only resolves the slotted one via char_ref).
+        local refs = {}
+        local cell = main.t_selGrid[i]
+        if type(cell) == "table" and type(cell.chars) == "table" then
+            for _, r in ipairs(cell.chars) do
+                local n = tonumber(r)
+                if n ~= nil then refs[#refs + 1] = n end
+            end
+        end
+        if entry and entry.char_ref ~= nil then
+            local n = tonumber(entry.char_ref)
+            if n ~= nil then refs[#refs + 1] = n end
+        end
+        for _, ref in ipairs(refs) do
+        if entry and entry.char ~= nil then
             if isCharUnlocked == nil or isCharUnlocked(ref) then
                 local charData = start.f_getCharData and start.f_getCharData(ref) or nil
                 local rawPath = (charData and charData.char) or tostring(entry.char)
                 if not f_isRandomSelectPath(rawPath) then
                 local cleanName = string.lower(rawPath)
-                cellDataCache[cleanName] = { data = entry.cell_data, ready = entry.cell_data_ready }
+                -- Cell art belongs to the SLOTTED char only: caching it under
+                -- a cell-mate's name (multi-char slots) showed Cap's portrait
+                -- on Ironman. Mates fall through to their own 9000,0 below.
+                if string.lower(tostring(entry.char)) == cleanName then
+                    cellDataCache[cleanName] = { data = entry.cell_data, ready = entry.cell_data_ready }
+                end
                 
                 -- If ignorePool is true, do not filter (used only during pool init)
                 local isEnabled = ignorePool or f_isCharacterEnabled(rawPath)
@@ -7068,6 +7160,7 @@ f_getValidCharData = function(ignorePool)
                 end
                 end
             end
+        end
         end
     end
     return valid
@@ -8036,6 +8129,7 @@ function f_drawStageBgModule(kind, x, y)
     if animSetLocalcoord and TOURNAMENT_REFERENCE_WIDTH and TOURNAMENT_REFERENCE_HEIGHT then
         animSetLocalcoord(anim, TOURNAMENT_REFERENCE_WIDTH, TOURNAMENT_REFERENCE_HEIGHT)
     end
+    -- Module base only (STAGE PORTRAIT SCALE targets screenpack portraits).
     local sc = tonumber(TOURNAMENT_STAGE_BG_MODULE_SCALE) or 1.0
     if animSetScale then animSetScale(anim, sc, sc) end
     if animUpdate then animUpdate(anim) end
@@ -8057,7 +8151,20 @@ end
 -- after is safe (shared AnimData: never leak the temp layer into the
 -- native select screen). Module SFF anims are fresh (layer 0): untouched.
 -- (Global: the main chunk has a 200 locals limit.)
-function f_drawScreenpackStageAnim(anim, params, x, y)
+-- Authoritative restore of native stage portrait scales (engine
+-- animReset): used when STAGE PORTRAIT SCALE returns to 1.0, so the true
+-- motif default comes back (our per-frame restore only knows the assumed
+-- base). Engine also resets on select entry; guarded no-op when missing.
+-- (Global: called from the menu item below.)
+function f_resetTournamentStagePortraits()
+    if type(main) ~= "table" or type(main.t_selStages) ~= "table" then return end
+    if type(resetStagePortraitAnim) ~= "function" then return end
+    for sno, _ in pairs(main.t_selStages) do
+        pcall(resetStagePortraitAnim, sno, "anim_data")
+    end
+end
+
+function f_drawScreenpackStageAnim(anim, params, x, y, stageRef, isPortrait)
     if anim == nil or type(main.f_animPosDraw) ~= "function" then return end
     local motifLayer = 2
     if type(params) == "table" and tonumber(params.layerno) ~= nil then
@@ -8067,7 +8174,100 @@ function f_drawScreenpackStageAnim(anim, params, x, y)
     if type(animSetLayerno) == "function" then
         pcall(animSetLayerno, anim, miscOpen and 0 or motifLayer)
     end
+    -- Stage portrait scale (Misc > Visual > STAGE PORTRAIT SCALE):
+    -- final = motif BASE × menu factor. Menu default 1.0 = base unchanged
+    -- (never treat 1 as an absolute scale). Shared anim: set for draw, then
+    -- restore the base so the native select screen is not left scaled.
+    -- No readable base => do not touch (avoid inventing base=1 and clobbering).
+    local spsBaseX, spsBaseY, haveBase = 1, 1, false
+    local function f_readScalePair(src)
+        if src == nil then return nil, nil end
+        if type(src) == "table" then
+            local sx = tonumber(src[1]) or tonumber(src.x) or tonumber(src[0])
+            if sx == nil then return nil, nil end
+            local sy = tonumber(src[2]) or tonumber(src.y) or sx
+            return sx, sy
+        end
+        local n = tonumber(src)
+        if n then return n, n end
+        return nil, nil
+    end
+    if type(params) == "table" then
+        local sx, sy = f_readScalePair(params.scale)
+        if sx == nil then sx, sy = f_readScalePair(params.scaleX and {params.scaleX, params.scaleY}) end
+        if sx == nil and tonumber(params.scaleX) then
+            sx = tonumber(params.scaleX)
+            sy = tonumber(params.scaleY) or sx
+        end
+        if sx ~= nil then
+            spsBaseX, spsBaseY, haveBase = sx, sy, true
+        end
+    end
+    -- Cache first good base per params table so later frames still multiply
+    -- correctly if the motif table is mutated.
+    if haveBase and type(params) == "table" then
+        if type(tournamentStagePortraitBaseCache) ~= "table" then
+            tournamentStagePortraitBaseCache = {}
+        end
+        if tournamentStagePortraitBaseCache[params] == nil then
+            tournamentStagePortraitBaseCache[params] = { spsBaseX, spsBaseY }
+        else
+            spsBaseX = tournamentStagePortraitBaseCache[params][1]
+            spsBaseY = tournamentStagePortraitBaseCache[params][2]
+        end
+    elseif type(params) == "table" and type(tournamentStagePortraitBaseCache) == "table"
+           and tournamentStagePortraitBaseCache[params] ~= nil then
+        spsBaseX = tournamentStagePortraitBaseCache[params][1]
+        spsBaseY = tournamentStagePortraitBaseCache[params][2]
+        haveBase = true
+    end
+    -- Stage .def portraitscale (new Ikemen GO field, engine-exposed per
+    -- stage in main.t_selStages): multiplies the base, like the native
+    -- materialize does. A known value also completes the base.
+    -- Stage localcoord (also engine-exposed): native scales by
+    -- motifLC/stageLC too (stage0: 0.25 x 1 x 1280/320 = 1.0;
+    -- stage0-720.def: 0.25 x 4 x 1280/1280 = 1.0).
+    if stageRef ~= nil and main and type(main.t_selStages) == "table" then
+        local okS, st = pcall(function() return main.t_selStages[stageRef] end)
+        if okS and type(st) == "table" then
+            if tonumber(st.portraitscale) then
+                local sps = tonumber(st.portraitscale)
+                spsBaseX, spsBaseY = spsBaseX * sps, spsBaseY * sps
+                haveBase = true
+            end
+            local slc = nil
+            if type(st.localcoord) == "table" then
+                slc = tonumber(st.localcoord[1]) or tonumber(st.localcoord.x)
+            else
+                slc = tonumber(st.localcoord)
+            end
+            local mlc = 1280
+            if motif and motif.info and type(motif.info.localcoord) == "table" then
+                mlc = tonumber(motif.info.localcoord[1]) or 1280
+            end
+            if slc and slc > 0 and mlc and mlc > 0 then
+                local lr = mlc / slc
+                spsBaseX, spsBaseY = spsBaseX * lr, spsBaseY * lr
+                haveBase = true
+            end
+        end
+    end
+    local spsF = 1
+    if tournament then spsF = tonumber(tournament.stagePortraitScale) or 1 end
+    if spsF < 0.01 then spsF = 0.01 end
+    if spsF > 5 then spsF = 5 end
+    -- STAGE PORTRAIT SCALE applies to the portrait sprite only (bg and
+    -- random boxes keep native scale): isPortrait comes true solely from
+    -- the sprite call below.
+    local wantScale = (isPortrait == true)
+    -- Always base × factor when we know the base (factor 1.0 => pure base).
+    if wantScale and haveBase and type(animSetScale) == "function" then
+        pcall(animSetScale, anim, spsBaseX * spsF, spsBaseY * spsF)
+    end
     pcall(main.f_animPosDraw, anim, x, y)
+    if wantScale and haveBase and type(animSetScale) == "function" then
+        pcall(animSetScale, anim, spsBaseX, spsBaseY)
+    end
     if miscOpen and type(animSetLayerno) == "function" then
         pcall(animSetLayerno, anim, motifLayer)
     end
@@ -8488,8 +8688,10 @@ function f_drawCharWinPoseAt(participant, x, y, scale, facing)
     if type(f_charDefPortraitScale) == "function" then
         s = s * f_charDefPortraitScale(rpHd)
     end
-    if type(f_charPortraitScaleAbs) == "function" then
-        s = s * f_charPortraitScaleAbs(rpHd, 1)
+    -- Animated portraits (Action 0 shared here): per-char ANIM scale
+    -- (drives win poses too). Small store is for static portraits only.
+    if type(f_charAnimPortraitScaleAbs) == "function" then
+        s = s * f_charAnimPortraitScaleAbs(rpHd, 1)
     end
     -- CNS [Size] xscale/yscale (e.g. Mr.Saikyo .5/.5): same factors the
     -- native select (start.lua f_animGet, v[2]==-1 branch) and the fight
@@ -12479,6 +12681,52 @@ function f_charPortraitScaleAbs(charPath, defScale)
     return 1
 end
 
+tournamentCharAnimPortraitScaleBaseIndex = nil  -- norm basename -> scale (anim store)
+-- Animated-portrait per-char scale store: ONE value drives BOTH Action 0
+-- and win poses (181). Small/static portraits keep charPortraitScales.
+-- Lookup mirrors f_charPortraitScaleAbs above (same key forms); neutral 1.
+function f_charAnimPortraitScaleRebuildBaseIndex()
+    tournamentCharAnimPortraitScaleBaseIndex = {}
+    local stored = tournament and tournament.charAnimPortraitScales
+    if type(stored) ~= "table" then return end
+    for k, v in pairs(stored) do
+        local n = tonumber(v)
+        if type(k) == "string" and n and n > 0 then
+            local b = f_charPortraitScaleNormBase(k)
+            if b then tournamentCharAnimPortraitScaleBaseIndex[b] = n end
+        end
+    end
+end
+function f_charAnimPortraitScaleAbs(charPath, defScale)
+    local storedScales = tournament and tournament.charAnimPortraitScales
+    if storedScales and type(charPath) == "string" then
+        local canonicalPath = nil
+        if type(f_canonCharPath) == "function" then
+            canonicalPath = f_canonCharPath(charPath)
+        end
+        local lowerPath = tournamentLowerPathCache[charPath]
+        if lowerPath == nil then
+            lowerPath = string.lower(charPath)
+            tournamentLowerPathCache[charPath] = lowerPath
+        end
+        local storedScale = nil
+        if canonicalPath ~= nil then storedScale = tonumber(storedScales[canonicalPath]) end
+        if not (storedScale and storedScale > 0) then storedScale = tonumber(storedScales[charPath]) end
+        if not (storedScale and storedScale > 0) then storedScale = tonumber(storedScales[lowerPath]) end
+        if storedScale and storedScale > 0 then return storedScale end
+        -- Basename fallback (spaces/hyphens): rebuild index once if needed.
+        local b = f_charPortraitScaleNormBase(charPath)
+        if b then
+            if tournamentCharAnimPortraitScaleBaseIndex == nil then
+                f_charAnimPortraitScaleRebuildBaseIndex()
+            end
+            local bn = tournamentCharAnimPortraitScaleBaseIndex and tournamentCharAnimPortraitScaleBaseIndex[b]
+            if bn and bn > 0 then return bn end
+        end
+    end
+    return 1
+end
+
 -- Character portrait scale editor (Misc > CHARACTERS PORTRAITS SCALE).
 function f_editCharPortraitScales()
     if type(f_getValidCharData) ~= "function" then return false end
@@ -12907,6 +13155,449 @@ function f_editCharPortraitScales()
     end
     -- Bracket/pool baked old sizes: wipe once on leave so they pick up edits.
     if scaleDirty then invalidateScaleCachesFull() end
+    if type(f_restoreOriginalAnimStates) == "function" then f_restoreOriginalAnimStates() end
+    f_waitForRelease()
+    return true
+end
+
+-- =====================================================================
+-- ANIM PORTRAIT SCALE EDITOR (Action 0 grid, no cell bg)
+-- =====================================================================
+-- Mirrors f_editCharPortraitScales, but every cell plays the char's
+-- Action 0 (static 9000,0 while the preload is pending) and the tuned
+-- value drives BOTH Action 0 and win poses (shared anim store).
+-- Grid geometry below is OWN tunables (ADJUST): columns, rows, origin,
+-- spacing. Positions/scales of the text lines follow the small editor.
+-- (Global: opened from the Main page-1 ANIM item.)
+function f_editCharAnimPortraitScales()
+    if type(f_getValidCharData) ~= "function" then return false end
+    f_entryTimingMark("anims", "start")
+    local validChars = f_getValidCharData(true)
+    f_entryTimingMark("anims", "valid chars listed (" .. #validChars .. ")")
+    if #validChars == 0 then return false end
+    -- Own grid (ADJUST all): columns, visible rows, origin, spacing.
+    local gridCols = 8  -- ADJUST: cells per row
+    local gridRowsPerPage = 3  -- ADJUST: visible rows (window scrolls)
+    local gridX0 = 250  -- ADJUST: first column X
+    local gridY0 = 330  -- ADJUST: first row Y
+    local gridPitchX = 110  -- ADJUST: column spacing
+    local gridPitchY = 140  -- ADJUST: row spacing
+    local gridBaseScale = 1.0  -- ADJUST: 8787 cursor base scale
+    local gridBaseDY = -40  -- ADJUST: extra Y shift of the 8787 base
+    local gridArrowDownDY = 10  -- ADJUST: extra down shift of the down arrow
+    local totalRows = math.max(1, math.ceil(#validChars / gridCols))
+    local topRow = 0
+    local cursorIndex = 1
+    local baseScale = tonumber(layout.portraitScale) or 1
+    -- Menu part (stored anim absolute or base). Effective = menu x lc x
+    -- defPS x cns (same stack the pair/winpose draws use).
+    local function menuScale()
+        local ch = validChars[cursorIndex]
+        if ch and type(f_charAnimPortraitScaleAbs) == "function" then
+            return f_charAnimPortraitScaleAbs(ch.path, 1)
+        end
+        return 1
+    end
+    local function lcOf(path)
+        local ws = 1
+        if type(f_getCharLocalcoord) == "function" and type(path) == "string" and path ~= "" then
+            local x = f_getCharLocalcoord(path)
+            x = tonumber(x)
+            if x and x > 0 then
+                ws = (tonumber(TOURNAMENT_PORTRAIT_REF_W)
+                    or tonumber(TOURNAMENT_REFERENCE_WIDTH) or 1280) / x
+                if ws < 0.4 then ws = 0.4 end
+                if ws > 16 then ws = 16 end
+            end
+        end
+        return ws
+    end
+    local function defPSOf(path)
+        if type(f_charDefPortraitScale) == "function" then
+            return f_charDefPortraitScale(path)
+        end
+        return 1
+    end
+    -- Save only on exit (mid-edit serialize of the full config was the hitch).
+    local scaleDirty = false
+    local function writeAnimScaleKey(path, s)
+        tournament.charAnimPortraitScales = tournament.charAnimPortraitScales or {}
+        local key = path
+        if type(f_charPortraitScaleStoreKey) == "function" then
+            key = f_charPortraitScaleStoreKey(path) or path
+        elseif type(f_canonCharPath) == "function" then
+            key = f_canonCharPath(path) or path
+        end
+        tournament.charAnimPortraitScales[key] = s
+        local b = f_charPortraitScaleNormBase and f_charPortraitScaleNormBase(path)
+        if b then
+            tournamentCharAnimPortraitScaleBaseIndex = tournamentCharAnimPortraitScaleBaseIndex or {}
+            tournamentCharAnimPortraitScaleBaseIndex[b] = s
+        end
+    end
+    local function storeScale(s)
+        local ch = validChars[cursorIndex]
+        if not ch or type(ch.path) ~= "string" then return end
+        if s < 0.01 then s = 0.01 end
+        if s > 5 then s = 5 end
+        writeAnimScaleKey(ch.path, s)
+        scaleDirty = true
+    end
+    -- C/Z: nudge every roster char. Uses the store table directly (no
+    -- per-char path lookup chain) so held C/Z stays cheap.
+    local function storeScaleAll(delta)
+        if type(validChars) ~= "table" then return end
+        tournament.charAnimPortraitScales = tournament.charAnimPortraitScales or {}
+        tournamentCharAnimPortraitScaleBaseIndex = tournamentCharAnimPortraitScaleBaseIndex or {}
+        local d = tonumber(delta) or 0
+        for _, ch in ipairs(validChars) do
+            if ch and type(ch.path) == "string" and ch.path ~= "" then
+                local key = ch.path
+                if type(f_charPortraitScaleStoreKey) == "function" then
+                    key = f_charPortraitScaleStoreKey(ch.path) or ch.path
+                end
+                local cur = tonumber(tournament.charAnimPortraitScales[key])
+                if not (cur and cur > 0) then
+                    cur = tonumber(f_charAnimPortraitScaleAbs(ch.path, 1)) or 1
+                end
+                local s = cur + d
+                if s < 0.01 then s = 0.01 end
+                if s > 5 then s = 5 end
+                tournament.charAnimPortraitScales[key] = s
+                local b = f_charPortraitScaleNormBase and f_charPortraitScaleNormBase(ch.path)
+                if b then tournamentCharAnimPortraitScaleBaseIndex[b] = s end
+            end
+        end
+        scaleDirty = true
+    end
+    local titleTxt = textImgNew()
+    textImgSetFont(titleTxt, minhaFonte); textImgSetBank(titleTxt, menuFontBank)
+    textImgSetAlign(titleTxt, MENU_CONFIG.title.align or 0)
+    textImgSetColor(titleTxt, unpack(MENU_CONFIG.title.color))
+    textImgSetPos(titleTxt, MENU_CONFIG.title.posX, MENU_CONFIG.title.posY)
+    textImgSetScale(titleTxt, MENU_CONFIG.title.scaleX, MENU_CONFIG.title.scaleY)
+    textImgSetText(titleTxt, "Character Anim Portrait Scales")
+    local subtitleTxt = textImgNew()
+    textImgSetFont(subtitleTxt, minhaFonte); textImgSetBank(subtitleTxt, menuFontBank)
+    textImgSetAlign(subtitleTxt, MENU_CONFIG.subtitle.align or 0)
+    textImgSetColor(subtitleTxt, unpack(MENU_CONFIG.subtitle.color))
+    textImgSetPos(subtitleTxt, MENU_CONFIG.subtitle.posX, MENU_CONFIG.subtitle.posY)
+    textImgSetScale(subtitleTxt, MENU_CONFIG.subtitle.scaleX, MENU_CONFIG.subtitle.scaleY)
+    local nameTxt = textImgNew()
+    textImgSetFont(nameTxt, minhaFonte); textImgSetBank(nameTxt, menuFontBank)
+    textImgSetAlign(nameTxt, 0)
+    textImgSetColor(nameTxt, 255, 255, 0)
+    -- ADJUST: yellow name/value line Y (user-tuned).
+    local animNameY = 218
+    textImgSetPos(nameTxt, 160, animNameY)
+    textImgSetScale(nameTxt, 0.25, 0.25)
+    local hintTxt = textImgNew()
+    textImgSetFont(hintTxt, minhaFonte); textImgSetBank(hintTxt, menuFontBank)
+    textImgSetAlign(hintTxt, 0)
+    textImgSetColor(hintTxt, 160, 160, 160)
+    textImgSetPos(hintTxt, 160, 224)
+    textImgSetScale(hintTxt, 0.21, 0.21)
+    textImgSetText(hintTxt, "ARROWS: MOVE | D: +SCALE | W: -SCALE | ESC: BACK")
+    local redTxt = textImgNew()
+    textImgSetFont(redTxt, minhaFonte); textImgSetBank(redTxt, menuFontBank)
+    textImgSetAlign(redTxt, 0)
+    textImgSetColor(redTxt, 255, 80, 80)
+    textImgSetPos(redTxt, 160, 199)
+    textImgSetScale(redTxt, 0.21, 0.21)
+    textImgSetText(redTxt, "Adjust anim scale value (Action 0 + win poses)")
+    local cell = (motif and motif.select_info and motif.select_info.cell) or {}
+    local kUp    = (cell.up and cell.up.key) or "U"
+    local kDown  = (cell.down and cell.down.key) or "D"
+    local kLeft  = (cell.left and cell.left.key) or "L"
+    local kRight = (cell.right and cell.right.key) or "R"
+    local function makeEdge(fn)
+        local prevVal = true
+        return function()
+            local cur = fn() and true or false
+            local trig = cur and not prevVal
+            prevVal = cur
+            return trig
+        end
+    end
+    local upEdge    = f_makeRepeatEdge(function() return f_menuDirPressed("up", kUp) end, 22, 6)
+    local downEdge  = f_makeRepeatEdge(function() return f_menuDirPressed("down", kDown) end, 22, 6)
+    local leftEdge  = f_makeRepeatEdge(function() return f_menuDirPressed("left", kLeft) end, 18, 4)
+    local rightEdge = f_makeRepeatEdge(function() return f_menuDirPressed("right", kRight) end, 18, 4)
+    local scaleUpEdge = f_makeRepeatEdge(function()
+        if f_menuKeyDown and f_menuKeyDown("d") then return true end
+        if type(f_joystickCmdDown) == "function" and f_joystickCmdDown("d") then return true end
+        return false
+    end, 18, 4)
+    local scaleDownEdge = f_makeRepeatEdge(function()
+        if f_menuKeyDown and f_menuKeyDown("w") then return true end
+        if type(f_joystickCmdDown) == "function" and f_joystickCmdDown("w") then return true end
+        return false
+    end, 18, 4)
+    local scaleAllUpEdge = f_makeRepeatEdge(function()
+        if f_menuKeyDown and f_menuKeyDown("c") then return true end
+        if type(f_joystickCmdDown) == "function" and f_joystickCmdDown("c") then return true end
+        return false
+    end, 18, 4)
+    local scaleAllDownEdge = f_makeRepeatEdge(function()
+        if f_menuKeyDown and f_menuKeyDown("z") then return true end
+        if type(f_joystickCmdDown) == "function" and f_joystickCmdDown("z") then return true end
+        return false
+    end, 18, 4)
+    local cancelEdge = makeEdge(function()
+        if getKey and getKey('ESCAPE') then return true end
+        if f_menuKeyDown and f_menuKeyDown("menu") then return true end
+        if type(f_joystickCmdDown) == "function" and f_joystickCmdDown("menu") then return true end
+        return false
+    end)
+    local resetEdge = makeEdge(function()
+        if f_isButtonPressed and f_isButtonPressed('x') then return true end
+        if f_menuKeyDown and f_menuKeyDown('x') then return true end
+        return false
+    end)
+    local function f_lastColInRow(row0)
+        local first = row0 * gridCols + 1
+        if first > #validChars then return 0 end
+        local last = math.min(first + gridCols - 1, #validChars)
+        return (last - first)
+    end
+    local function f_ensureCursorVisible()
+        local row0 = math.floor((cursorIndex - 1) / gridCols)
+        if row0 < topRow then
+            topRow = row0
+        elseif row0 >= topRow + gridRowsPerPage then
+            topRow = row0 - gridRowsPerPage + 1
+        end
+        if topRow < 0 then topRow = 0 end
+        local maxTop = math.max(0, totalRows - gridRowsPerPage)
+        if topRow > maxTop then topRow = maxTop end
+    end
+    local canceled = false
+    -- Keycap specs are static mid-screen: resolve once (gameOption reads
+    -- every frame otherwise).
+    local pcD = f_menuKeySpec("d", "D")
+    local pcW = f_menuKeySpec("w", "W")
+    local pcX = f_menuKeySpec("x", "X")
+    local pcC = f_menuKeySpec("c", "C")
+    local pcZ = f_menuKeySpec("z", "Z")
+    -- Cursor name line: recompute only when the cursor moves.
+    local lastNameCursor, lastNameText = -1, ""
+    while not canceled do
+        if main and main.f_cmdInput then main.f_cmdInput() end
+        local u = upEdge()
+        local d = downEdge()
+        local l = leftEdge()
+        local r = rightEdge()
+        local su = scaleUpEdge()
+        local sd = scaleDownEdge()
+        local au = scaleAllUpEdge()
+        local ad = scaleAllDownEdge()
+        local xr = resetEdge()
+        local b = cancelEdge()
+        if su then
+            storeScale(menuScale() + 0.01)
+            if type(sndMove) == "function" then sndMove() end
+        elseif sd then
+            storeScale(menuScale() - 0.01)
+            if type(sndMove) == "function" then sndMove() end
+        elseif au then
+            storeScaleAll(0.01)
+            if type(sndMove) == "function" then sndMove() end
+        elseif ad then
+            storeScaleAll(-0.01)
+            if type(sndMove) == "function" then sndMove() end
+        elseif xr then
+            -- X: reset this char to default (clears store key + basename index).
+            local ch = validChars[cursorIndex]
+            if ch and type(ch.path) == "string" and tournament.charAnimPortraitScales then
+                local key = ch.path
+                if type(f_charPortraitScaleStoreKey) == "function" then
+                    key = f_charPortraitScaleStoreKey(ch.path) or ch.path
+                elseif type(f_canonCharPath) == "function" then
+                    key = f_canonCharPath(ch.path) or ch.path
+                end
+                tournament.charAnimPortraitScales[key] = nil
+                tournament.charAnimPortraitScales[ch.path] = nil
+                if type(f_canonCharPath) == "function" then
+                    local ck = f_canonCharPath(ch.path)
+                    if type(ck) == "string" then tournament.charAnimPortraitScales[ck] = nil end
+                end
+                local b = f_charPortraitScaleNormBase and f_charPortraitScaleNormBase(ch.path)
+                if b and tournamentCharAnimPortraitScaleBaseIndex then
+                    tournamentCharAnimPortraitScaleBaseIndex[b] = nil
+                end
+                scaleDirty = true
+            end
+            if type(sndMove) == "function" then sndMove() end
+        elseif l then
+            local row0 = math.floor((cursorIndex - 1) / gridCols)
+            local col0 = (cursorIndex - 1) % gridCols
+            local lastCol = f_lastColInRow(row0)
+            col0 = col0 - 1
+            if col0 < 0 then col0 = lastCol end
+            cursorIndex = row0 * gridCols + col0 + 1
+            f_ensureCursorVisible()
+            if type(sndMove) == "function" then sndMove() end
+        elseif r then
+            local row0 = math.floor((cursorIndex - 1) / gridCols)
+            local col0 = (cursorIndex - 1) % gridCols
+            local lastCol = f_lastColInRow(row0)
+            col0 = col0 + 1
+            if col0 > lastCol then col0 = 0 end
+            cursorIndex = row0 * gridCols + col0 + 1
+            f_ensureCursorVisible()
+            if type(sndMove) == "function" then sndMove() end
+        elseif u then
+            local row0 = math.floor((cursorIndex - 1) / gridCols)
+            local col0 = (cursorIndex - 1) % gridCols
+            row0 = row0 - 1
+            if row0 < 0 then row0 = totalRows - 1 end
+            local lastCol = f_lastColInRow(row0)
+            if col0 > lastCol then col0 = lastCol end
+            cursorIndex = row0 * gridCols + col0 + 1
+            f_ensureCursorVisible()
+            if type(sndMove) == "function" then sndMove() end
+        elseif d then
+            local row0 = math.floor((cursorIndex - 1) / gridCols)
+            local col0 = (cursorIndex - 1) % gridCols
+            row0 = row0 + 1
+            if row0 > totalRows - 1 then row0 = 0 end
+            local lastCol = f_lastColInRow(row0)
+            if col0 > lastCol then col0 = lastCol end
+            cursorIndex = row0 * gridCols + col0 + 1
+            f_ensureCursorVisible()
+            if type(sndMove) == "function" then sndMove() end
+        elseif b then
+            canceled = true
+            sndCancel()
+        end
+        -- Module frame ticker (same as bracket): drives the 8787 base
+        -- sequence below (without this the base freezes on 1 sprite).
+        bgTime = (bgTime or 0) + 1
+        if clearColor then clearColor(0, 0, 0) end
+        tournamentBgSys.draw()
+        f_drawBlackOverlay()
+        textImgDraw(titleTxt)
+        textImgSetText(subtitleTxt, "Per-char anim scale (" .. tostring(#validChars) .. " chars)")
+        textImgDraw(subtitleTxt)
+        do
+            if cursorIndex ~= lastNameCursor then
+                local ch = validChars[cursorIndex]
+                local nm = (ch and ch.path) or ""
+                if type(f_getCleanDisplayName) == "function" and nm ~= "" then
+                    local ok, dn = pcall(f_getCleanDisplayName, nm, false, true, false)
+                    if ok and type(dn) == "string" and dn ~= "" then nm = dn end
+                end
+                lastNameCursor, lastNameText = cursorIndex, nm
+            end
+            textImgSetText(nameTxt, tostring(lastNameText) .. "  " .. string.format("%.2f", menuScale()))
+        end
+        f_drawHintSegments(hintTxt, {
+            { icon = 14 },
+            { key = pcD.key },
+            { text = "   " }, { icon = 15 },
+            { key = pcW.key },
+            { text = "   " }, { icon = 19 },
+            { key = pcC.key },
+            { text = "   " }, { icon = 20 },
+            { key = pcZ.key },
+            { text = "   " }, { icon = 7 },
+            { key = pcX.key },
+        }, MENU_CONFIG.hint.posX, MENU_CONFIG.hint.posY)
+        for i = 1, #validChars do
+            local row0 = math.floor((i - 1) / gridCols)
+            if row0 >= topRow and row0 < topRow + gridRowsPerPage then
+                local col = (i - 1) % gridCols
+                local visRow = row0 - topRow
+                local x = gridX0 + col * gridPitchX
+                local y = gridY0 + visRow * gridPitchY
+                -- No cell bg here (anim portraits only).
+                -- Cursor base: bracket SFF 8787 ring BEHIND the char
+                -- (replaces the white highlight box on this screen).
+                if i == cursorIndex and type(f_getTournamentSffFrameAnim) == "function" then
+                    local bfr = math.floor((bgTime or 0) / (TOURNAMENT_SFF_ANIM_TICKS or 4))
+                        % (TOURNAMENT_SFF_ANIM_FRAMES or 67)
+                    local banim = f_getTournamentSffFrameAnim(TOURNAMENT_SFF_ANIM_GROUP_A, bfr)
+                    if banim then
+                        if type(animSetLocalcoord) == "function" then
+                            animSetLocalcoord(banim, TOURNAMENT_REFERENCE_WIDTH, TOURNAMENT_REFERENCE_HEIGHT)
+                        end
+                        if animSetScale then animSetScale(banim, gridBaseScale, gridBaseScale) end
+                        if animSetPos then animSetPos(banim, x, y + (tonumber(gridBaseDY) or 0)) end
+                        if animSetFacing then animSetFacing(banim, 1) end
+                        if animUpdate then animUpdate(banim) end
+                        if type(f_resetWarp) == "function" then f_resetWarp(banim) end
+                        pcall(animDraw, banim)
+                    end
+                end
+                local char = validChars[i]
+                -- Action 0 when staged, else the static 9000,0 meanwhile.
+                local anim = nil
+                if type(f_loadCharAnimatedPortrait) == "function" then
+                    local okA, aA = pcall(f_loadCharAnimatedPortrait, char.path)
+                    if okA then anim = aA end
+                end
+                if anim == nil and type(f_loadCharPortrait) == "function" then
+                    local okS, aS = pcall(f_loadCharPortrait, char.path)
+                    if okS then anim = aS end
+                end
+                if anim then
+                    if type(f_backupOriginalState) == "function" then f_backupOriginalState(anim) end
+                    local lcScale = 1
+                    if type(f_applyCharLocalcoord) == "function" then
+                        lcScale = f_applyCharLocalcoord(anim, char.path) or 1
+                    end
+                    local esc = baseScale
+                    if type(f_charAnimPortraitScaleAbs) == "function" then
+                        esc = baseScale * f_charAnimPortraitScaleAbs(char.path, 1)
+                    end
+                    if type(f_charDefPortraitScale) == "function" then
+                        esc = esc * f_charDefPortraitScale(char.path)
+                    end
+                    local cnsSX, cnsSY = 1, 1
+                    if type(f_charCnsScaleX) == "function" then cnsSX = tonumber(f_charCnsScaleX(char.path)) or 1 end
+                    if type(f_charCnsScaleY) == "function" then cnsSY = tonumber(f_charCnsScaleY(char.path)) or 1 end
+                    if animSetScale then animSetScale(anim, esc * lcScale * cnsSX, esc * lcScale * cnsSY) end
+                    if animUpdate then animUpdate(anim) end
+                    if animSetPos then animSetPos(anim, x, y) end
+                    if animSetFacing then animSetFacing(anim, 1) end
+                    if type(f_resetWarp) == "function" then f_resetWarp(anim) end
+                    -- Anim editor: always normal palette (grayscale is a
+                    -- pool-only meaning; here size is what matters).
+                    if animSetPalFX then animSetPalFX(anim, normalPalFX) end
+                    if animDraw then animDraw(anim) end
+                end
+            end
+        end
+        -- Scroll arrows (native options style) when the grid overflows:
+        -- fixed options corners (scrollArrowX/Y), same values as menus.
+        -- Down arrow shifted by gridArrowDownDY (this screen only).
+        if type(f_drawMenuScrollArrows) == "function" then
+            f_drawMenuScrollArrows(topRow > 0,
+                (topRow + gridRowsPerPage) < totalRows,
+                tonumber(MENU_CONFIG.scrollArrowX) or 280,
+                tonumber(MENU_CONFIG.scrollArrowUpY) or 55,
+                (tonumber(MENU_CONFIG.scrollArrowDownY) or 200) + (tonumber(gridArrowDownDY) or 0),
+                tonumber(MENU_CONFIG.scrollArrowScale) or 0.5)
+        end
+        -- Name/scale line on top of the portraits (red adjust line
+        -- removed: yellow name/value only).
+        textImgDraw(nameTxt)
+        -- Pump staged preloads (Action 0 portraits queue here; no-op when empty).
+        if main and type(main.f_preloadTick) == "function" then pcall(main.f_preloadTick, 4) end
+        if type(f_perfProbeTick) == "function" then f_perfProbeTick("anims") end
+        refresh()
+        f_entryTimingFrame("anims")
+    end
+    -- Flush pending scale edits (dirty from D/W/X without cooldown expiry).
+    if scaleDirty and type(f_saveTournamentConfig) == "function" then
+        f_saveTournamentConfig()
+    end
+    -- Animated caches hold no baked scale (set per draw), but drop them so
+    -- staged anims re-resolve after edits.
+    if scaleDirty then
+        tournamentAnimatedPortraitCache = {}
+        tournamentWinPoseCache = {}
+    end
     if type(f_restoreOriginalAnimStates) == "function" then f_restoreOriginalAnimStates() end
     f_waitForRelease()
     return true
@@ -15235,8 +15926,9 @@ end
                     if type(f_charDefPortraitScale) == "function" then
                         sA = sA * f_charDefPortraitScale(rpA)
                     end
-                    if type(f_charPortraitScaleAbs) == "function" then
-                        sA = sA * f_charPortraitScaleAbs(rpA, 1)
+                    -- Animated pair: per-char ANIM scale (shared with 181).
+                    if type(f_charAnimPortraitScaleAbs) == "function" then
+                        sA = sA * f_charAnimPortraitScaleAbs(rpA, 1)
                     end
                     -- CNS [Size] xscale/yscale (Mr.Saikyo .5/.5): Action 0
                     -- anim only, per axis.
@@ -15270,8 +15962,9 @@ end
                     if type(f_charDefPortraitScale) == "function" then
                         sB = sB * f_charDefPortraitScale(rpB)
                     end
-                    if type(f_charPortraitScaleAbs) == "function" then
-                        sB = sB * f_charPortraitScaleAbs(rpB, 1)
+                    -- Animated pair: per-char ANIM scale (shared with 181).
+                    if type(f_charAnimPortraitScaleAbs) == "function" then
+                        sB = sB * f_charAnimPortraitScaleAbs(rpB, 1)
                     end
                     -- CNS [Size] xscale/yscale (Mr.Saikyo .5/.5): Action 0
                     -- anim only, per axis.
@@ -15375,7 +16068,7 @@ end
                     f_drawStageBgModule("bg", px, py)
                 elseif stg.portrait and stg.portrait.bg then
                     -- Layer-aware (misc open => layer 0, else motif layerno).
-                    f_drawScreenpackStageAnim(stg.portrait.bg.AnimData, stg.portrait.bg, mx, my)
+                    f_drawScreenpackStageAnim(stg.portrait.bg.AnimData, stg.portrait.bg, mx, my, spRef)
                 end
                 -- Sprites share the box origin (motif offset serves the
                 -- native composition and throws them off-screen here).
@@ -15388,7 +16081,7 @@ end
                         f_drawStageBgModule("random", rx, ry)
                     elseif stg.portrait and stg.portrait.random then
                         -- Layer-aware (misc open => layer 0, else motif layerno).
-                        f_drawScreenpackStageAnim(stg.portrait.random.AnimData, stg.portrait.random, mx, my)
+                        f_drawScreenpackStageAnim(stg.portrait.random.AnimData, stg.portrait.random, mx, my, spRef)
                     end
                 elseif spRef ~= nil and type(main.t_selStages) == "table"
                     and main.t_selStages[spRef] ~= nil then
@@ -15429,7 +16122,7 @@ if stageAnim ~= nil then
     end
 
     -- Layer-aware (misc open => layer 0, else motif layerno).
-    f_drawScreenpackStageAnim(stageAnim, stg.portrait, spriteDrawX, spriteDrawY)
+    f_drawScreenpackStageAnim(stageAnim, stg.portrait, spriteDrawX, spriteDrawY, spRef, true)
 end
                 end
             end
@@ -15600,8 +16293,10 @@ end
                     textImgDraw(tournamentBracketTitleTxt)
                 end
             end
-            -- Subtitle hidden while seeding (the instruction owns that slot).
+            -- Subtitle hidden while seeding (the instruction owns that slot)
+            -- and on the final screen (championMode: winners own the space).
             if tournamentBracketSubtitleTxt ~= nil
+               and not championMode
                and not (tournament and tournament.seeding)
                and tostring(tournament and tournament.subtitle or "") ~= "" then
                 textImgSetScale(tournamentBracketSubtitleTxt, tonumber(TOURNAMENT_SUBTITLE_SCALE) or lsc, tonumber(TOURNAMENT_SUBTITLE_SCALE) or lsc)
@@ -16217,12 +16912,52 @@ f_miscSettingsMenu = function(returnMusic, drawBehind, saveCtx)
             end,
         },
         {
+            label = "CHARACTERS ANIM PORTRAIT SCALE:",
+            options = {true},  -- Dummy (only to fill the options slot)
+            idx = 1,
+            format = function() return "" end,
+            apply = function() end,
+            isAction = true,
+            isChange = true,
+            onChange = function()
+                if type(f_editCharAnimPortraitScales) == "function" then f_editCharAnimPortraitScales() end
+            end,
+        },
+        {
             label = "STAGE SELECT PORTRAIT BG:",
             options = {"Module", "Screenpack Original"},
             idx = (tournament.stagePortraitBg == "Module") and 1 or 2,
             format = function(v) return v end,
             apply = function(v)
                 tournament.stagePortraitBg = v
+            end,
+        },
+        {
+            label = "STAGE PORTRAIT SCALE:",
+            -- 0.01..5.00 step 0.01 (hold LEFT/RIGHT: loop edges repeat).
+            -- Multiplier over the motif/module BASE (final = base × this).
+            -- 1.00 = original size; never treated as absolute scale.
+            options = (function()
+                local t = {}
+                for i = 1, 500 do t[#t + 1] = i / 100 end
+                return t
+            end)(),
+            idx = (function()
+                local s = tonumber(tournament.stagePortraitScale) or 1
+                if s < 0.01 then s = 0.01 end
+                if s > 5 then s = 5 end
+                return math.floor(s * 100 + 0.5)
+            end)(),
+            format = function(v) return string.format("%.2f", tonumber(v) or 1) end,
+            apply = function(v)
+                tournament.stagePortraitScale = tonumber(v) or 1
+                -- Back to 1.0: authoritative restore of the true default.
+                -- TEMP DISABLED: bare animReset may wipe the motif scale
+                -- itself (suspect in the default-clobber). Re-enable after
+                -- the params diag identifies the true base.
+                -- if (tonumber(v) or 1) == 1 and type(f_resetTournamentStagePortraits) == "function" then
+                --     f_resetTournamentStagePortraits()
+                -- end
             end,
         },
         {
@@ -16301,16 +17036,22 @@ f_miscSettingsMenu = function(returnMusic, drawBehind, saveCtx)
     -- PORTRAITS on) + Music tab (4 tracks + 4 volumes).
     local visualItems, visualPlusItems, musicItems = {}, {}, {}
     local seenVisualPlus = false
+    local joystickItem = nil
     for _, it in ipairs(allMiscItems) do
         local lb = tostring(it.label or "")
         if lb:find("MUSIC:") or lb:find("VOLUME:") then
             musicItems[#musicItems + 1] = it
-        elseif seenVisualPlus or lb == "SHOW ANIMATED PORTRAITS:" then
+        elseif lb == "JOYSTICK BUTTON ICONS:" then
+            joystickItem = it  -- re-anchored first on Visual+ below
+        elseif seenVisualPlus or lb == "TROPHY SPRITE:" then
             seenVisualPlus = true
             visualPlusItems[#visualPlusItems + 1] = it
         else
             visualItems[#visualItems + 1] = it
         end
+    end
+    if joystickItem ~= nil then
+        table.insert(visualPlusItems, 1, joystickItem)
     end
     -- SHOW REMAINING/ELIMINATED removed (always off).
     local tabs = {
@@ -17083,6 +17824,25 @@ f_miscSettingsMenu = function(returnMusic, drawBehind, saveCtx)
                     { text = " TO " },
                     { icon = 8 },
                 }, axX, axY, 1)
+            end
+            -- CHANGE rows (open an editor): "PRESS KEY TO [icon]" like Main.
+            if it.isChange and not it.isAdjustScales and previewHintTxt ~= nil then
+                -- Snug after "LABEL:" (labels end at posX+label.offsetX; value slot is empty here)
+                local chX = MENU_CONFIG.posX + MENU_CONFIG.label.offsetX + 8
+                local chY = vy
+                local chRaw = nil
+                if type(f_getMenuKeyName) == "function" then chRaw = f_getMenuKeyName("d") end
+                if type(chRaw) ~= "string" or chRaw == "" then chRaw = tostring(TOURNAMENT_PREVIEW_BUTTON or "d") end
+                local chKey = string.upper(chRaw)
+                -- ANIM SCALES uses 8 (same as SMALL above).
+                local chIcon = 17
+                if ((it._en or it.label) == "CHARACTERS ANIM PORTRAIT SCALE:") then chIcon = 8 end
+                f_drawHintSegments(previewHintTxt, {
+                    { text = "PRESS " },
+                    { key = string.lower(chKey) },
+                    { text = " TO " },
+                    { icon = chIcon },
+                }, chX, chY, 1)
             end
             if it.isPreview and cursor == i and songsHintTxt ~= nil then
                 textImgDraw(songsHintTxt)
@@ -17894,7 +18654,7 @@ end
         },
         {
             page = 1,
-            label = "CHARACTERS PORTRAITS SCALE:",
+            label = "CHARACTERS SMALL PORTRAIT SCALE:",
             options = {true},  -- Dummy (only to fill the options slot)
             idx = 1,
             format = function() return "" end,
@@ -17904,6 +18664,19 @@ end
             isAdjustScales = true,
             onChange = function()
                 if type(f_editCharPortraitScales) == "function" then f_editCharPortraitScales() end
+            end,
+        },
+        {
+            page = 1,
+            label = "CHARACTERS ANIM PORTRAIT SCALE:",
+            options = {true},  -- Dummy (only to fill the options slot)
+            idx = 1,
+            format = function() return "" end,
+            apply = function() end,
+            isAction = true,
+            isChange = true,
+            onChange = function()
+                if type(f_editCharAnimPortraitScales) == "function" then f_editCharAnimPortraitScales() end
             end,
         },
         --[[ VOIDED (page 1 holds joystick/bg/scale only; music lives on
@@ -18744,9 +19517,11 @@ local labelTxts, valueTxts = {}, {}
                 if type(chRaw) ~= "string" or chRaw == "" then chRaw = tostring(TOURNAMENT_PREVIEW_BUTTON or "d") end
                 local chKey = string.upper(chRaw)
                 -- PLAYERS FLAGS / CPU FLAGS POOL use 16, PLAYERS IDS uses 17.
+                -- ANIM SCALES uses 8 (same as SMALL above).
                 local chIcon = 17
                 if ((it._en or it.label) == "PLAYERS FLAGS:") then chIcon = 16 end
                 if ((it._en or it.label) == "CPU FLAGS POOL:") then chIcon = 16 end
+                if ((it._en or it.label) == "CHARACTERS ANIM PORTRAIT SCALE:") then chIcon = 8 end
                 f_drawHintSegments(previewHintTxt, {
                     { text = "PRESS " },
                     { key = string.lower(chKey) },
@@ -21081,7 +21856,10 @@ pcall(function()
         end
     end
 
-    -- Optional debug (delete if no longer needed)
+    -- Optional debug file in the game root (OFF: it littered releases).
+    -- Set true to re-enable TOURNAMENT_MENUNAME_DEBUG.txt once.
+    local MENUNAME_DEBUG_FILE = false
+    if MENUNAME_DEBUG_FILE then
     local dbg = io.open("TOURNAMENT_MENUNAME_DEBUG.txt", "w")
     if dbg then
         dbg:write("inserted = " .. tostring(inserted) .. "\n")
@@ -21104,7 +21882,42 @@ pcall(function()
         end
         dbg:close()
     end
+    end
 end)
+
+-- =====================================================================
+-- MENU COEXISTENCE (other menu-injecting modules)
+-- =====================================================================
+-- Another module may rebuild itemname_order after us (wiping our entry),
+-- or motif may not be ready at our load. Re-asserts the tournament entry
+-- on every menu open; strictly additive (never touches other items) and
+-- a no-op when already present.
+if type(hook) == "table" and type(hook.add) == "function" then
+    pcall(hook.add, "main.menu.loop", "tournamentMenuItem", function()
+        main.t_itemname = main.t_itemname or {}
+        main.t_itemname['tournamentmode'] = f_menuStartNew
+        local okM, menuSec = pcall(function() return motif and motif.title_info end)
+        if not okM or type(menuSec) ~= "table" then return end
+        local m = menuSec.menu
+        if type(m) ~= "table" or type(m.itemname) ~= "table"
+            or type(m.itemname_order) ~= "table" then return end
+        for _, k in ipairs(m.itemname_order) do
+            if k == "tournamentmode" then return end
+        end
+        if type(main.f_appendItemname) == "function" then
+            local before = nil
+            for _, key in ipairs(m.itemname_order) do
+                if key == "exit" or key == "options" then before = key; break end
+            end
+            pcall(main.f_appendItemname, m, "", "tournamentmode", {
+                __value = "TOURNAMENT MODE",
+            }, before)
+        else
+            m.itemname["tournamentmode"] = "TOURNAMENT MODE"
+            m.itemname_order[#m.itemname_order + 1] = "tournamentmode"
+        end
+    end)
+end
 
 -- =====================================================================
 -- PRELOAD NO BOOT
