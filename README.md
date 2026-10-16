@@ -32,7 +32,7 @@ Credits:
 
 - Cable Dorado 2 (CD2) and Orange Dolphin for testing the module
 
-- Devon and OroCrimson for sprites/fonts from Capcom vs SNK Black Edition
+- Devon and OroCrimson for sprites/fonts from Capcom vs SNK Black Edition screenpack
 
 - and Ohmga Shironeko: for allowing me to use some sprites from your screenpack
 
