@@ -63,6 +63,7 @@ return {
     menu_show_bracket_between = "SHOW BRACKET BETWEEN MATCHES:",
     menu_autosave = "AUTO-SAVE ON BRACKET SCREEN:",
     menu_random_stage = "RANDOM STAGE:",
+    menu_restore_defaults = "RESTORE DEFAULTS:",
 
     -- Titles / headers
     title_tournament_setup = "Tournament Setup",

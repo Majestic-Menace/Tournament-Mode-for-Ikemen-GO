@@ -6,7 +6,52 @@
 local menuFontIndex = 4
 local menuFontBank = 0
 local menuFontPath = motif.files and motif.files["font" .. menuFontIndex]
-local minhaFonte = fontNew("external/mods/TournamentMode/TournamentModeFont.def", -1)
+-- Own folder, auto-detected (rename-proof: "TournamentMode-main" etc.).
+-- Used by f_findModFile below. Falls back to the canonical path.
+tournamentModDir = nil
+do
+    local okI, info = pcall(function() return debug.getinfo(1, "S") end)
+    local src = (okI and type(info) == "table" and info.source) or ""
+    src = tostring(src):gsub("\\", "/")
+    if src:sub(1, 1) == "@" then src = src:sub(2) end
+    local dir = src:match("^(.*/)[^/]*$")
+    if type(dir) == "string" and dir ~= "" then tournamentModDir = dir end
+    if tournamentModDir == nil then tournamentModDir = "external/mods/TournamentMode/" end
+end
+
+-- Ordered candidate search for mod resources (own folder -> module
+-- subfolder -> mods root -> game dirs). Lua has no directory listing
+-- here, so candidates are explicit (same scheme as the MP3s).
+-- (Global: loaders below + boot check.)
+function f_findModFile(basename, extraDirs)
+    local dirs = {}
+    if type(tournamentModDir) == "string" and tournamentModDir ~= "" then
+        dirs[#dirs + 1] = tournamentModDir
+    end
+    dirs[#dirs + 1] = "external/mods/TournamentMode/"
+    dirs[#dirs + 1] = "external/mods/"
+    if type(extraDirs) == "table" then
+        for _, d in ipairs(extraDirs) do
+            if type(d) == "string" and d ~= "" then dirs[#dirs + 1] = d end
+        end
+    end
+    local seen = {}
+    for _, d in ipairs(dirs) do
+        if not seen[d] then
+            seen[d] = true
+            local p = tostring(d) .. tostring(basename)
+            local f = io.open(p, "r")
+            if f then f:close(); return p end
+        end
+    end
+    return nil
+end
+
+local tournamentFontPath = "external/mods/TournamentMode/TournamentModeFont.def"
+if type(f_findModFile) == "function" then
+    tournamentFontPath = f_findModFile("TournamentModeFont.def") or tournamentFontPath
+end
+local minhaFonte = fontNew(tournamentFontPath, -1)
     or fontNew("external/mods/TournamentModeFont.def", -1)  -- fallback: raiz dos mods
 
 -- Boot asset check: a missing sibling file fails SILENTLY (black screens
@@ -14,22 +59,22 @@ local minhaFonte = fontNew("external/mods/TournamentMode/TournamentModeFont.def"
 -- Usual cause: mod folder renamed (ex. "TournamentMode-main") or partial copy.
 do
     local need = {
-        "external/mods/TournamentMode/TournamentMode.sff",
-        "external/mods/TournamentMode/TournamentModeFont.def",
-        "external/mods/TournamentMode/tournament_lang_en.lua",
-        "external/mods/TournamentMode/tournament_country_flags.lua",
-        "external/mods/TournamentMode/tournament_cpu_ids.txt",
+        "TournamentMode.sff",
+        "TournamentModeFont.def",
+        "tournament_lang_en.lua",
+        "tournament_country_flags.lua",
+        "tournament_cpu_ids.txt",
     }
     tournamentMissingAssets = {}
-    for _, p in ipairs(need) do
-        local f = io.open(p, "r")
-        if f then f:close()
-        else tournamentMissingAssets[#tournamentMissingAssets + 1] = p end
+    for _, b in ipairs(need) do
+        local p = nil
+        if type(f_findModFile) == "function" then p = f_findModFile(b) end
+        if p == nil then tournamentMissingAssets[#tournamentMissingAssets + 1] = b end
     end
     if #tournamentMissingAssets > 0 then
         print("[Tournament][FATAL] missing mod files (incomplete install or renamed folder?):")
-        for _, p in ipairs(tournamentMissingAssets) do
-            print("[Tournament][FATAL]   MISSING: " .. tostring(p))
+        for _, b in ipairs(tournamentMissingAssets) do
+            print("[Tournament][FATAL]   MISSING (searched mod folders): " .. tostring(b))
         end
         print("[Tournament][FATAL] menus will show black with no text until these exist.")
     end
@@ -2338,8 +2383,9 @@ TOURNAMENT_KEYCAP_DY = -8  -- LEGACY fallback (usado sÃƒÆ’Ã†--  Ãƒâ�
 TOURNAMENT_KEYCAP_DX = 0  -- keep 0 for flow layout; non-zero desyncs sprite vs text slot
 -- Paths only used if Keys mod did not expose sprInputHints.
 TOURNAMENT_KEYCAP_SFF_PATHS = {
-    --"external/mods/Keys/inputhints.sff",
-    --"data/inputhints.sff",
+    "external/mods/Keys/inputhints.sff",
+    "external/mods/inputhints.sff",
+    "data/inputhints.sff",
 }
 -- Optional: try to load the Keys Lua if it was not run yet (order-independent).
 TOURNAMENT_KEYS_LUA_PATHS = {
@@ -3380,12 +3426,16 @@ local TOURNAMENT_SFF_PATH = "external/mods/TournamentMode/TournamentMode.sff"
 
 function f_loadTournamentSff()
     if tournamentSff ~= nil then return tournamentSff end
-    local ok, s = pcall(sffNew, TOURNAMENT_SFF_PATH)
+    local path = TOURNAMENT_SFF_PATH
+    if type(f_findModFile) == "function" then
+        path = f_findModFile("TournamentMode.sff") or path
+    end
+    local ok, s = pcall(sffNew, path)
     if ok and s then
         tournamentSff = s
         return s
     end
-    print("[Tournament ERROR] Could not load " .. TOURNAMENT_SFF_PATH)
+    print("[Tournament ERROR] Could not load " .. tostring(path))
     return nil
 end
 
@@ -4280,7 +4330,11 @@ local TOURNAMENT_HUMAN_ID_MAXLEN = 20
 -- Global (no `local`) on purpose: easy to extend/replace from elsewhere.
 TOURNAMENT_CPU_ID_POOL = {}
 do
-    local txtFile = io.open("external/mods/TournamentMode/tournament_cpu_ids.txt", "r")
+    local cpuIdsPath = "external/mods/TournamentMode/tournament_cpu_ids.txt"
+    if type(f_findModFile) == "function" then
+        cpuIdsPath = f_findModFile("tournament_cpu_ids.txt") or cpuIdsPath
+    end
+    local txtFile = io.open(cpuIdsPath, "r")
     if txtFile then
         local okRead, list = pcall(function()
             local t = {}
@@ -4332,7 +4386,11 @@ print("[Tournament] CPU ID pool: " .. tostring(#TOURNAMENT_CPU_ID_POOL) .. " nam
 -- same folder. ORDER = sff group 6 (entry i <-> sprite 6,(i-1)).
 TOURNAMENT_COUNTRY_FLAGS = {}
 do
-    local okLoad, chunk = pcall(loadfile, "external/mods/TournamentMode/tournament_country_flags.lua")
+    local flagsPath = "external/mods/TournamentMode/tournament_country_flags.lua"
+    if type(f_findModFile) == "function" then
+        flagsPath = f_findModFile("tournament_country_flags.lua") or flagsPath
+    end
+    local okLoad, chunk = pcall(loadfile, flagsPath)
     if okLoad and type(chunk) == "function" then
         local okRun, list = pcall(chunk)
         if okRun and type(list) == "table" then
@@ -4360,7 +4418,11 @@ TOURNAMENT_LANG_LABELS = { "English", "Portuguese-BR" }
 TOURNAMENT_LANG_EN = {}
 TOURNAMENT_LANG = {}
 do
-    local okLoad, chunk = pcall(loadfile, TOURNAMENT_LANG_FILES.en)
+    local enPath = TOURNAMENT_LANG_FILES.en
+    if type(f_findModFile) == "function" then
+        enPath = f_findModFile("tournament_lang_en.lua") or enPath
+    end
+    local okLoad, chunk = pcall(loadfile, enPath)
     if okLoad and type(chunk) == "function" then
         local okRun, tbl = pcall(chunk)
         if okRun and type(tbl) == "table" then TOURNAMENT_LANG_EN = tbl end
@@ -4371,6 +4433,9 @@ function f_loadTournamentLang(code)
     if type(tournament) == "table" then tournament.language = code end
     local tbl = nil
     local path = TOURNAMENT_LANG_FILES[code]
+    if type(f_findModFile) == "function" and (code == "en" or code == "ptBR") then
+        path = f_findModFile("tournament_lang_" .. code .. ".lua") or path
+    end
     if path then
         local okLoad, chunk = pcall(loadfile, path)
         if okLoad and type(chunk) == "function" then
@@ -4476,6 +4541,7 @@ TOURNAMENT_LABEL_TO_KEY = {
     ["SHOW BRACKET BETWEEN MATCHES:"] = "menu_show_bracket_between",
     ["AUTO-SAVE ON BRACKET SCREEN:"] = "menu_autosave",
     ["RANDOM STAGE:"] = "menu_random_stage",
+    ["RESTORE DEFAULTS:"] = "menu_restore_defaults",
 }
 function f_refreshMenuItemsLang(list)
     if type(list) ~= "table" then return end
@@ -6033,7 +6099,7 @@ local function f_ensureCharacterPoolSlots()
     characterPoolsSlots = {}
     for i = 1, CHARACTER_POOL_SLOTS do
         characterPoolsSlots[i] = {
-            name = "Slot " .. tostring(i),
+            name = "Default",
             pool = {},
         }
     end
@@ -6047,9 +6113,9 @@ local function f_saveCharacterPools()
         slots = {},
     }
     for i = 1, CHARACTER_POOL_SLOTS do
-        local s = characterPoolsSlots[i] or { name = "Slot " .. i, pool = {} }
+        local s = characterPoolsSlots[i] or { name = "Default", pool = {} }
         data.slots[i] = {
-            name = s.name or ("Slot " .. i),
+            name = s.name or "Default",
             pool = f_copyPoolTable(s.pool),
         }
     end
@@ -6090,7 +6156,7 @@ local function f_applyCharacterPoolSlot(slotIndex)
     characterPoolsActive = slotIndex
     local slot = characterPoolsSlots[slotIndex]
     if not slot then
-        slot = { name = "Slot " .. slotIndex, pool = {} }
+        slot = { name = "Default", pool = {} }
         characterPoolsSlots[slotIndex] = slot
     end
     characterPool = f_copyPoolTable(slot.pool)
@@ -6107,7 +6173,7 @@ local function f_saveCurrentPoolToActiveSlot()
     end
     local slot = characterPoolsSlots[characterPoolsActive]
     if not slot then
-        slot = { name = "Slot " .. characterPoolsActive, pool = {} }
+        slot = { name = "Default", pool = {} }
         characterPoolsSlots[characterPoolsActive] = slot
     end
     slot.pool = f_copyPoolTable(characterPool)
@@ -6145,8 +6211,12 @@ local function f_loadCharacterPools()
         for i = 1, CHARACTER_POOL_SLOTS do
             local src = rawSlots[i] or rawSlots[tostring(i)]
             if type(src) == "table" then
+                local nm = (type(src.name) == "string" and src.name ~= "") and src.name or "Default"
+                -- Legacy auto-generated names ("Slot 1"/"Preset 1"...) become "Default".
+                local low = tostring(nm):lower()
+                if low:match("^slot %d+$") or low:match("^preset %d+$") then nm = "Default" end
                 characterPoolsSlots[i] = {
-                    name = (type(src.name) == "string" and src.name ~= "") and src.name or ("Slot " .. i),
+                    name = nm,
                     pool = f_copyPoolTable(src.pool),
                 }
             end
@@ -6171,21 +6241,21 @@ end
 local function f_getActivePoolSlotLabel()
     f_ensureCharacterPoolSlots()
     local slot = characterPoolsSlots[characterPoolsActive]
-    local name = (slot and slot.name) or ("Slot " .. characterPoolsActive)
-    return string.format("SLOT %d/%d", characterPoolsActive, CHARACTER_POOL_SLOTS)
+    local name = (slot and slot.name) or "Default"
+    return string.format("PRESET %d/%d", characterPoolsActive, CHARACTER_POOL_SLOTS)
 end
 
 local function f_getActivePoolSlotName()
     f_ensureCharacterPoolSlots()
     local slot = characterPoolsSlots[characterPoolsActive]
-    return (slot and slot.name) or ("Slot " .. characterPoolsActive)
+    return (slot and slot.name) or "Default"
 end
 
 local function f_setActivePoolSlotName(newName)
     f_ensureCharacterPoolSlots()
     if type(newName) ~= "string" then return end
     newName = newName:match("^%s*(.-)%s*$") or newName
-    if newName == "" then newName = "Slot " .. characterPoolsActive end
+    if newName == "" then newName = "Default" end
     local slot = characterPoolsSlots[characterPoolsActive]
     if not slot then
         slot = { name = newName, pool = {} }
@@ -11673,7 +11743,7 @@ local function f_characterPoolScreen()
         textImgDraw(subtitleTxt)
 
         -- Top shows the slot number only ("Slot N").
-        textImgSetText(slotTxt, "Slot " .. tostring(tonumber(characterPoolsActive) or 1))
+        textImgSetText(slotTxt, "Preset " .. tostring(tonumber(characterPoolsActive) or 1))
         textImgDraw(slotTxt)
 
         -- [VOIDED - page indicator removed; single grid with scroll]
@@ -11833,7 +11903,7 @@ function f_promptPoolSlotName(slotIdx)
     textImgSetColor(titleTxt, 255, 255, 255)
     textImgSetPos(titleTxt, 160, 40)
     textImgSetScale(titleTxt, 0.45, 0.45)
-    textImgSetText(titleTxt, "SLOT " .. tostring(slotIdx) .. " - ENTER SLOT NAME")
+    textImgSetText(titleTxt, "Preset " .. tostring(slotIdx) .. " - Enter Preset Name")
     local nameTxt = textImgNew()
     textImgSetFont(nameTxt, minhaFonte); textImgSetBank(nameTxt, menuFontBank)
     textImgSetAlign(nameTxt, 0)
@@ -12078,8 +12148,9 @@ function f_promptPoolSlotName(slotIdx)
 end
 
 -- =====================================================================
--- POOL SLOT COLUMNS (CPU CHARACTER POOL entry): two columns with
--- "S1: <slot name>" rows (same layout as the ID columns). ENTER opens
+-- POOL SLOT COLUMNS (CPU CHARACTER POOL entry): two columns, each row a
+-- white "Preset N:" prefix followed by the name (blue; yellow when
+-- selected). ENTER opens
 -- the slot-name typing screen, then the pool for that slot; ESC backs
 -- out to the menu. Names persist in character_pools.json.
 -- (Global: called from the CPU CHARACTER POOL menu item.)
@@ -12095,7 +12166,7 @@ function f_poolSlotColumns()
            and characterPoolsSlots[i].name ~= "" then
             return characterPoolsSlots[i].name
         end
-        return "Slot " .. tostring(i)
+        return "Default"
     end
     local half = math.ceil(n / 2)
     local titleTxt = textImgNew()
@@ -12104,7 +12175,7 @@ function f_poolSlotColumns()
     textImgSetColor(titleTxt, 255, 255, 255)
     textImgSetPos(titleTxt, 160, 40)
     textImgSetScale(titleTxt, 0.45, 0.45)
-    textImgSetText(titleTxt, "POOL SLOTS")
+    textImgSetText(titleTxt, "Pool Presets")
     local hintTxt = textImgNew()
     textImgSetFont(hintTxt, minhaFonte); textImgSetBank(hintTxt, menuFontBank)
     textImgSetAlign(hintTxt, 0)
@@ -12120,6 +12191,27 @@ function f_poolSlotColumns()
         textImgSetFont(rowTxt, minhaFonte); textImgSetBank(rowTxt, menuFontBank)
         textImgSetAlign(rowTxt, 1)
         textImgSetScale(rowTxt, 0.21, 0.21)
+    end
+    local rowNameTxt = nil
+    do
+        local ok, t = pcall(textImgNew)
+        if ok and type(t) == "userdata" then rowNameTxt = t end
+    end
+    if rowNameTxt ~= nil then
+        textImgSetFont(rowNameTxt, minhaFonte); textImgSetBank(rowNameTxt, menuFontBank)
+        textImgSetAlign(rowNameTxt, 1)
+        textImgSetScale(rowNameTxt, 0.21, 0.21)
+    end
+    -- Row layout: white "Preset N:" prefix, then the blue name at a fixed
+    -- offset (widest prefix "Preset 50: ") so names line up across rows.
+    local prefixW = 0
+    do
+        local w = nil
+        if type(textImgGetTextWidth) == "function" then
+            local ok, v = pcall(textImgGetTextWidth, rowTxt, "Preset 50: ")
+            if ok then w = tonumber(v) end
+        end
+        prefixW = (tonumber(w) or 0) * 0.21
     end
     local upEdge = f_makeRepeatEdge(function() return type(f_menuDirPressed) == "function" and f_menuDirPressed("up") end, 22, 6)
     local downEdge = f_makeRepeatEdge(function() return type(f_menuDirPressed) == "function" and f_menuDirPressed("down") end, 22, 6)
@@ -12222,13 +12314,26 @@ function f_poolSlotColumns()
                     if pn <= n then
                         local nm = slotName(pn)
                         if #nm > 20 then nm = nm:sub(1, 20) end
-                        if pn == cursor then textImgSetColor(rowTxt, 255, 255, 0)
-                        else textImgSetColor(rowTxt, 200, 220, 255) end
-                        textImgSetText(rowTxt, "S" .. tostring(pn) .. ": " .. nm)
                         local xx = 30
                         if c == 2 then xx = 166 end
-                        textImgSetPos(rowTxt, xx, 70 + (vi - 1) * 14)
-                        textImgDraw(rowTxt)
+                        local yy = 70 + (vi - 1) * 14
+                        if rowNameTxt ~= nil then
+                            textImgSetColor(rowTxt, 255, 255, 255)
+                            textImgSetText(rowTxt, "Preset " .. tostring(pn) .. ": ")
+                            textImgSetPos(rowTxt, xx, yy)
+                            textImgDraw(rowTxt)
+                            if pn == cursor then textImgSetColor(rowNameTxt, 255, 255, 0)
+                            else textImgSetColor(rowNameTxt, 200, 220, 255) end
+                            textImgSetText(rowNameTxt, nm)
+                            textImgSetPos(rowNameTxt, xx + prefixW, yy)
+                            textImgDraw(rowNameTxt)
+                        else
+                            if pn == cursor then textImgSetColor(rowTxt, 255, 255, 0)
+                            else textImgSetColor(rowTxt, 200, 220, 255) end
+                            textImgSetText(rowTxt, "Preset " .. tostring(pn) .. ": " .. nm)
+                            textImgSetPos(rowTxt, xx, yy)
+                            textImgDraw(rowTxt)
+                        end
                     end
                 end
             end
@@ -17111,6 +17216,23 @@ f_miscSettingsMenu = function(returnMusic, drawBehind, saveCtx)
             format = function(v) return "" end,
             apply = function() end })
     end
+    -- RESTORE DEFAULTS row (all tabs except Save/Load): pressing the action
+    -- key (D, same as the scale rows) resets THIS screen to SD/HD defaults.
+    -- Rendered as a "PRESS [D] TO [default-icon]" hint in the isChange branch.
+    for _, tb in ipairs(tabs) do
+        if not tb.isSaveTab then
+            table.insert(tb.list, {
+                label = "RESTORE DEFAULTS:",
+                options = {true},  -- Dummy (only to fill the options slot)
+                idx = 1,
+                format = function() return "" end,
+                apply = function() end,
+                isAction = true,   -- LEFT/RIGHT skip it; D triggers via isChange
+                isChange = true,
+                isRestoreDefaults = true,
+            })
+        end
+    end
     local tabIdx = 1
     local items = tabs[tabIdx].list
 
@@ -17562,6 +17684,11 @@ f_miscSettingsMenu = function(returnMusic, drawBehind, saveCtx)
                     f_previewTournamentMusic(pit.options[pit.idx], pit.previewWhich)
                 end
                 sndDone()
+            elseif pit and pit.isRestoreDefaults then
+                sndDone()
+                if type(f_resetMenuItemsToDefaults) == "function" then
+                    f_resetMenuItemsToDefaults(items)
+                end
             elseif pit and pit.isChange and type(pit.onChange) == "function" then
                 sndDone()
                 pit.onChange()
@@ -17699,8 +17826,11 @@ f_miscSettingsMenu = function(returnMusic, drawBehind, saveCtx)
             ]]
             { icon = 18 },
             { key = "left" }, { text = "/" },
-            { key = "right" }, { text = "   " }, { icon = 7 },
+            { key = "right" },
+            --[[ VOIDED: RESTORE DEFAULTS now lives as a menu item row
+            { text = "   " }, { icon = 7 },
             { key = kxO.key },
+            ]]
             --[[ VOIDED (kept): Back to Bracket
             { text = "   BACK TO BRACKET " },
             { key = stO.key }, { text = "/" },
@@ -17837,6 +17967,7 @@ f_miscSettingsMenu = function(returnMusic, drawBehind, saveCtx)
                 -- ANIM SCALES uses 8 (same as SMALL above).
                 local chIcon = 17
                 if ((it._en or it.label) == "CHARACTERS ANIM PORTRAIT SCALE:") then chIcon = 8 end
+                if it.isRestoreDefaults then chIcon = 7 end
                 f_drawHintSegments(previewHintTxt, {
                     { text = "PRESS " },
                     { key = string.lower(chKey) },
@@ -18348,7 +18479,7 @@ end
             options = {true},  -- Dummy (only to fill the options slot)
             idx = 1,
             format = function()
-                -- Same enabled/total as the pool subtitle ("Slot X - 300/435").
+                -- Same enabled/total as the pool subtitle ("Preset X - 300/435").
                 local en, to = "?", "?"
                 if type(f_getEnabledCharacterCount) == "function" then
                     en = tostring(f_getEnabledCharacterCount())
@@ -18356,7 +18487,7 @@ end
                 if type(f_getTotalCharacterCount) == "function" then
                     to = tostring(f_getTotalCharacterCount())
                 end
-                return "Slot " .. tostring(characterPoolsActive) .. " - " .. en .. "/" .. to
+                return "Preset " .. tostring(characterPoolsActive) .. " - " .. en .. "/" .. to
             end,
             apply = function()
                 -- Edge (poolEdge) already consumed the press; opens the slot
@@ -18768,6 +18899,26 @@ end
     if page < 1 then page = 1 end
     local maxPages = 5
     if page > maxPages then page = maxPages end
+
+    -- RESTORE DEFAULTS row on every setup screen EXCEPT page 2 (Main
+    -- Settings = START MODE/SLOT, the load/new tournament screen): pressing
+    -- the action key (D, same as the scale rows) resets the current page to
+    -- the SD/HD defaults. Rendered as "PRESS [D] TO [default-icon]" (isChange).
+    for pg = 1, maxPages do
+        if pg ~= 2 then
+        items[#items + 1] = {
+            page = pg,
+            label = "RESTORE DEFAULTS:",
+            options = {true},  -- Dummy (only to fill the options slot)
+            idx = 1,
+            format = function() return "" end,
+            apply = function() end,
+            isAction = true,   -- LEFT/RIGHT skip it; D triggers via isChange
+            isChange = true,
+            isRestoreDefaults = true,
+        }
+        end
+    end
 
     -- Status do save do SLOT selecionado (Main Settings > SLOT).
     -- Updated on demand: on open and whenever the slot changes.
@@ -19215,6 +19366,11 @@ local labelTxts, valueTxts = {}, {}
                     f_previewTournamentMusic(pit.options[pit.idx], pit.previewWhich)
                 end
                 sndDone()
+            elseif pit and pit.isRestoreDefaults then
+                sndDone()
+                if type(f_resetMenuItemsToDefaults) == "function" then
+                    f_resetMenuItemsToDefaults(currentPageItems)
+                end
             elseif pit and pit.isChange and type(pit.onChange) == "function" then
                 sndDone()
                 pit.onChange()
@@ -19372,8 +19528,11 @@ local labelTxts, valueTxts = {}, {}
                       ]]
                       { icon = 18 },
                       { key = "left" }, { text = "/" },
-                      { key = "right" }, { text = "   " }, { icon = 7 },
+                      { key = "right" },
+                      --[[ VOIDED: RESTORE DEFAULTS now lives as a row
+                      { text = "   " }, { icon = 7 },
                       { key = kxS.key },
+                      ]]
                       --[[ VOIDED (kept):
                       { text = "   NEXT " },
                       { key = stS.key }, { text = "   BACK " },
@@ -19390,8 +19549,11 @@ local labelTxts, valueTxts = {}, {}
                   ]]
                   { icon = 18 },
                   { key = "left" }, { text = "/" },
-                  { key = "right" }, { text = "   " }, { icon = 7 },
+                  { key = "right" },
+                  --[[ VOIDED: RESTORE DEFAULTS now lives as a row
+                  { text = "   " }, { icon = 7 },
                   { key = kxS.key },
+                  ]]
                   --[[ VOIDED (kept):
                   { text = "   START " },
                   { key = stS.key }, { text = "   BACK " },
@@ -19522,6 +19684,7 @@ local labelTxts, valueTxts = {}, {}
                 if ((it._en or it.label) == "PLAYERS FLAGS:") then chIcon = 16 end
                 if ((it._en or it.label) == "CPU FLAGS POOL:") then chIcon = 16 end
                 if ((it._en or it.label) == "CHARACTERS ANIM PORTRAIT SCALE:") then chIcon = 8 end
+                if it.isRestoreDefaults then chIcon = 7 end
                 f_drawHintSegments(previewHintTxt, {
                     { text = "PRESS " },
                     { key = string.lower(chKey) },
@@ -21886,37 +22049,61 @@ pcall(function()
 end)
 
 -- =====================================================================
--- MENU COEXISTENCE (other menu-injecting modules)
+-- MENU COEXISTENCE (other menu-injecting modules / +system.def addons)
 -- =====================================================================
--- Another module may rebuild itemname_order after us (wiping our entry),
--- or motif may not be ready at our load. Re-asserts the tournament entry
--- on every menu open; strictly additive (never touches other items) and
--- a no-op when already present.
+-- Anything that rebuilds itemname_order from the defs after us (e.g. a
+-- +system.def addon applied late, like trials') wipes runtime entries.
+-- f_ensureTournamentMenuItemNow() re-asserts ours: called at load (above),
+-- on every menu open (hook), and BEFORE every title build (f_start
+-- wrapper below, so a rebuild-then-build sequence still shows us).
+-- Strictly additive (never touches other items), no-op when present.
+-- (Global: hook + wrapper call it.)
+function f_ensureTournamentMenuItemNow()
+    main.t_itemname = main.t_itemname or {}
+    if type(f_menuStartNew) == "function" then
+        main.t_itemname['tournamentmode'] = f_menuStartNew
+    end
+    local okM, menuSec = pcall(function() return motif and motif.title_info end)
+    if not okM or type(menuSec) ~= "table" then return end
+    local m = menuSec.menu
+    if type(m) ~= "table" or type(m.itemname) ~= "table"
+        or type(m.itemname_order) ~= "table" then return end
+    for _, k in ipairs(m.itemname_order) do
+        if k == "tournamentmode" then return end
+    end
+    if type(main.f_appendItemname) == "function" then
+        local before = nil
+        for _, key in ipairs(m.itemname_order) do
+            if key == "exit" or key == "options" then before = key; break end
+        end
+        pcall(main.f_appendItemname, m, "", "tournamentmode", {
+            __value = "TOURNAMENT MODE",
+        }, before)
+    else
+        m.itemname["tournamentmode"] = "TOURNAMENT MODE"
+        m.itemname_order[#m.itemname_order + 1] = "tournamentmode"
+    end
+end
 if type(hook) == "table" and type(hook.add) == "function" then
     pcall(hook.add, "main.menu.loop", "tournamentMenuItem", function()
-        main.t_itemname = main.t_itemname or {}
-        main.t_itemname['tournamentmode'] = f_menuStartNew
-        local okM, menuSec = pcall(function() return motif and motif.title_info end)
-        if not okM or type(menuSec) ~= "table" then return end
-        local m = menuSec.menu
-        if type(m) ~= "table" or type(m.itemname) ~= "table"
-            or type(m.itemname_order) ~= "table" then return end
-        for _, k in ipairs(m.itemname_order) do
-            if k == "tournamentmode" then return end
-        end
-        if type(main.f_appendItemname) == "function" then
-            local before = nil
-            for _, key in ipairs(m.itemname_order) do
-                if key == "exit" or key == "options" then before = key; break end
-            end
-            pcall(main.f_appendItemname, m, "", "tournamentmode", {
-                __value = "TOURNAMENT MODE",
-            }, before)
-        else
-            m.itemname["tournamentmode"] = "TOURNAMENT MODE"
-            m.itemname_order[#m.itemname_order + 1] = "tournamentmode"
+        if type(f_ensureTournamentMenuItemNow) == "function" then
+            pcall(f_ensureTournamentMenuItemNow)
         end
     end)
+end
+-- main.f_start() builds the title menu FROM itemname_order: re-assert ours
+-- first so a rebuild (defs) immediately followed by a build still shows us.
+-- (Precedent: trials wraps menu.f_start the same way.)
+if type(main) == "table" and type(main.f_start) == "function"
+    and type(tournamentMenuFStartWrapped) == "nil" then
+    tournamentMenuFStartWrapped = true
+    local _tournamentOrigFStart = main.f_start
+    main.f_start = function(...)
+        if type(f_ensureTournamentMenuItemNow) == "function" then
+            pcall(f_ensureTournamentMenuItemNow)
+        end
+        return _tournamentOrigFStart(...)
+    end
 end
 
 -- =====================================================================
